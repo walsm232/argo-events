@@ -25,6 +25,7 @@ import (
 	argoworkflow "github.com/argoproj/argo-events/pkg/sensors/triggers/argo-workflow"
 	awslambda "github.com/argoproj/argo-events/pkg/sensors/triggers/aws-lambda"
 	eventhubs "github.com/argoproj/argo-events/pkg/sensors/triggers/azure-event-hubs"
+	azurefunctions "github.com/argoproj/argo-events/pkg/sensors/triggers/azure-functions"
 	servicebus "github.com/argoproj/argo-events/pkg/sensors/triggers/azure-service-bus"
 	customtrigger "github.com/argoproj/argo-events/pkg/sensors/triggers/custom-trigger"
 	"github.com/argoproj/argo-events/pkg/sensors/triggers/email"
@@ -165,6 +166,15 @@ func (sensorCtx *SensorContext) GetTrigger(ctx context.Context, trigger *v1alpha
 		result, err := email.NewEmailTrigger(sensorCtx.sensor, trigger, log)
 		if err != nil {
 			log.Errorw("failed to new a Email trigger", zap.Error(err))
+			return nil
+		}
+		return result
+	}
+
+	if trigger.Template.AzureFunctions != nil {
+		result, err := azurefunctions.NewAzureFunctionsTrigger(sensorCtx.azureFunctionsClients, sensorCtx.sensor, trigger, log)
+		if err != nil {
+			log.Errorw("failed to new an Azure Functions trigger", zap.Error(err))
 			return nil
 		}
 		return result

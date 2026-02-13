@@ -70,7 +70,9 @@ type SensorContext struct {
 	azureEventHubsClients sharedutil.StringKeyedMap[*eventhubs.Hub]
 	// azureServiceBusClients holds the references to active Azure Service Bus clients.
 	azureServiceBusClients sharedutil.StringKeyedMap[*servicebus.Sender]
-	metrics                *sensormetrics.Metrics
+	// azureFunctionsClients holds the references to HTTP clients for Azure Functions triggers.
+	azureFunctionsClients sharedutil.StringKeyedMap[*http.Client]
+	metrics               *sensormetrics.Metrics
 }
 
 // NewSensorContext returns a new sensor execution context.
@@ -94,6 +96,7 @@ func NewSensorContext(kubeClient kubernetes.Interface, dynamicClient dynamic.Int
 		openwhiskClients:       sharedutil.NewStringKeyedMap[*whisk.Client](),
 		azureEventHubsClients:  sharedutil.NewStringKeyedMap[*eventhubs.Hub](),
 		azureServiceBusClients: sharedutil.NewStringKeyedMap[*servicebus.Sender](),
+		azureFunctionsClients:  sharedutil.NewStringKeyedMap[*http.Client](),
 		metrics:                metrics,
 	}
 }

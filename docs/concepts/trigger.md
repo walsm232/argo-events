@@ -15,5 +15,6 @@ dependencies are resolved.
 1. NATS Messages
 1. Slack Notifications
 1. Azure Event Hubs Messages
+1. Azure Functions
 1. Create any Kubernetes Objects
 1. Log (for debugging event bus messages)

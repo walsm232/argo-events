@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: azure-functions-trigger
+spec:
+  dependencies:
+    - name: test-dep
+      eventSourceName: webhook
+      eventName: example
+  triggers:
+    - template:
+        name: azure-functions-trigger
+        azureFunctions:
+          functionName: hello
+          appName: my-function-app
+          payload:
+            - src:
+                dependencyName: test-dep
+                dataKey: body.name
+              dest: name
+
+          # Optional, use if the Azure Function requires a function-level auth key.
+          # The key will be sent via the x-functions-key HTTP header.
+          functionKey:
+            name: azure-function-secret
+            key: functionKey
+
+      # Optional, policy to determine success/failure based on HTTP status code.
+      policy:
+        status:
+          allow:
+            - 200
+            - 202

@@ -339,6 +339,9 @@ type TriggerTemplate struct {
 	// Email refers to the trigger designed to send an email notification
 	// +optional
 	Email *EmailTrigger `json:"email,omitempty" protobuf:"bytes,17,opt,name=email"`
+	// AzureFunctions refers to the trigger designed to invoke Azure Functions
+	// +optional
+	AzureFunctions *AzureFunctionsTrigger `json:"azureFunctions,omitempty" protobuf:"bytes,18,opt,name=azureFunctions"`
 }
 
 type ConditionsResetCriteria struct {
@@ -521,6 +524,25 @@ type AzureServiceBusTrigger struct {
 	// the trigger resource.
 	// +optional
 	Parameters []TriggerParameter `json:"parameters,omitempty" protobuf:"bytes,7,rep,name=parameters"`
+}
+
+// AzureFunctionsTrigger refers to the specification of the trigger to invoke an Azure Function
+type AzureFunctionsTrigger struct {
+	// FunctionName refers to the name of the Azure Function to invoke.
+	FunctionName string `json:"functionName" protobuf:"bytes,1,opt,name=functionName"`
+	// AppName refers to the name of the Azure Function App.
+	// The function URL is constructed as https://<appName>.azurewebsites.net/api/<functionName>
+	AppName string `json:"appName" protobuf:"bytes,2,opt,name=appName"`
+	// FunctionKey refers to a K8s secret containing the function-level auth key.
+	// This is used as the value for the x-functions-key header or the "code" query param.
+	// +optional
+	FunctionKey *corev1.SecretKeySelector `json:"functionKey,omitempty" protobuf:"bytes,3,opt,name=functionKey"`
+	// Payload is the list of key-value extracted from an event payload to construct the request payload.
+	Payload []TriggerParameter `json:"payload" protobuf:"bytes,4,rep,name=payload"`
+	// Parameters is the list of key-value extracted from event's payload that are applied to
+	// the trigger resource.
+	// +optional
+	Parameters []TriggerParameter `json:"parameters,omitempty" protobuf:"bytes,5,rep,name=parameters"`
 }
 
 // KafkaTrigger refers to the specification of the Kafka trigger.
