@@ -42,6 +42,8 @@ type AdaptorArgs struct {
 	Image  string
 	Sensor *v1alpha1.Sensor
 	Labels map[string]string
+	// TemplateDefaults are merged under the object's spec.template
+	TemplateDefaults *v1alpha1.Template
 }
 
 // Reconcile does the real logic
@@ -307,6 +309,10 @@ func buildDeployment(args *AdaptorArgs, eventBus *v1alpha1.EventBus) (*appv1.Dep
 }
 
 func buildDeploymentSpec(args *AdaptorArgs) (*appv1.DeploymentSpec, error) {
+	template, err := controllerscommon.MergeTemplate(args.TemplateDefaults, args.Sensor.Spec.Template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge template defaults: %w", err)
+	}
 	replicas := args.Sensor.Spec.GetReplicas()
 	sensorContainer := corev1.Container{
 		Image:           args.Image,
@@ -316,14 +322,13 @@ func buildDeploymentSpec(args *AdaptorArgs) (*appv1.DeploymentSpec, error) {
 			{Name: "metrics", ContainerPort: v1alpha1.SensorMetricsPort},
 		},
 	}
-	if x := args.Sensor.Spec.Template; x != nil && x.Container != nil {
-		x.Container.ApplyToContainer(&sensorContainer)
+	if template != nil && template.Container != nil {
+		template.Container.ApplyToContainer(&sensorContainer)
 	}
 	sensorContainer.Name = "main"
 	podTemplateLabels := make(map[string]string)
-	if args.Sensor.Spec.Template != nil && args.Sensor.Spec.Template.Metadata != nil &&
-		len(args.Sensor.Spec.Template.Metadata.Labels) > 0 {
-		for k, v := range args.Sensor.Spec.Template.Metadata.Labels {
+	if template != nil && template.Metadata != nil && len(template.Metadata.Labels) > 0 {
+		for k, v := range template.Metadata.Labels {
 			podTemplateLabels[k] = v
 		}
 	}
@@ -347,19 +352,19 @@ func buildDeploymentSpec(args *AdaptorArgs) (*appv1.DeploymentSpec, error) {
 			},
 		},
 	}
-	if args.Sensor.Spec.Template != nil {
-		if args.Sensor.Spec.Template.Metadata != nil {
-			spec.Template.SetAnnotations(args.Sensor.Spec.Template.Metadata.Annotations)
+	if template != nil {
+		if template.Metadata != nil {
+			spec.Template.SetAnnotations(template.Metadata.Annotations)
 		}
-		spec.Template.Spec.ServiceAccountName = args.Sensor.Spec.Template.ServiceAccountName
-		spec.Template.Spec.Volumes = args.Sensor.Spec.Template.Volumes
-		spec.Template.Spec.SecurityContext = args.Sensor.Spec.Template.SecurityContext
-		spec.Template.Spec.NodeSelector = args.Sensor.Spec.Template.NodeSelector
-		spec.Template.Spec.Tolerations = args.Sensor.Spec.Template.Tolerations
-		spec.Template.Spec.Affinity = args.Sensor.Spec.Template.Affinity
-		spec.Template.Spec.ImagePullSecrets = args.Sensor.Spec.Template.ImagePullSecrets
-		spec.Template.Spec.PriorityClassName = args.Sensor.Spec.Template.PriorityClassName
-		spec.Template.Spec.Priority = args.Sensor.Spec.Template.Priority
+		spec.Template.Spec.ServiceAccountName = template.ServiceAccountName
+		spec.Template.Spec.Volumes = template.Volumes
+		spec.Template.Spec.SecurityContext = template.SecurityContext
+		spec.Template.Spec.NodeSelector = template.NodeSelector
+		spec.Template.Spec.Tolerations = template.Tolerations
+		spec.Template.Spec.Affinity = template.Affinity
+		spec.Template.Spec.ImagePullSecrets = template.ImagePullSecrets
+		spec.Template.Spec.PriorityClassName = template.PriorityClassName
+		spec.Template.Spec.Priority = template.Priority
 	}
 	return spec, nil
 }

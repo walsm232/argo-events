@@ -127,6 +127,7 @@ nav:
       - "managed-namespace.md"
       - "validating-admission-webhook.md"
       - "security.md"
+      - "template-defaults.md"
       - "metrics.md"
       - HA/DR Recommendations: "dr_ha_recommendations.md"
   - Developer Guide:

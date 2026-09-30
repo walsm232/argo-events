@@ -253,6 +253,22 @@ func Test_BuildDeployment(t *testing.T) {
 		assert.Equal(t, int32(3), *deployment.Spec.RevisionHistoryLimit)
 	})
 
+	t.Run("test template defaults", func(t *testing.T) {
+		args := &AdaptorArgs{
+			Image:  testImage,
+			Sensor: sensorObj,
+			Labels: testLabels,
+			TemplateDefaults: &v1alpha1.Template{
+				ServiceAccountName: "default-sa",
+				NodeSelector:       map[string]string{"pool": "default"},
+			},
+		}
+		deployment, err := buildDeployment(args, fakeEventBus)
+		assert.Nil(t, err)
+		assert.Equal(t, "fake-sa", deployment.Spec.Template.Spec.ServiceAccountName)
+		assert.Equal(t, map[string]string{"pool": "default"}, deployment.Spec.Template.Spec.NodeSelector)
+	})
+
 	t.Run("test kafka eventbus secrets attached", func(t *testing.T) {
 		args := &AdaptorArgs{
 			Image:  testImage,

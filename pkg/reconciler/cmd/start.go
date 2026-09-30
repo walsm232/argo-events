@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -10,11 +11,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	argoevents "github.com/argoproj/argo-events"
@@ -41,8 +45,21 @@ type ArgoEventsControllerOpts struct {
 
 func Start(eventsOpts ArgoEventsControllerOpts) {
 	logger := logging.NewArgoEventsLogger().Named(eventbus.ControllerName)
+	// Signalled when the EventSource or Sensor template defaults change, so
+	// that every object is reconciled and its deployment rolled out.
+	eventSourceDefaultsChanged := make(chan event.GenericEvent, 1)
+	sensorDefaultsChanged := make(chan event.GenericEvent, 1)
 	config, err := reconciler.LoadConfig(func(err error) {
 		logger.Errorw("Failed to reload global configuration file", zap.Error(err))
+	}, func(eventSourceChanged, sensorChanged bool) {
+		if eventSourceChanged {
+			logger.Info("EventSource template defaults changed, reconciling all EventSources")
+			notify(eventSourceDefaultsChanged, &aev1.EventSource{})
+		}
+		if sensorChanged {
+			logger.Info("Sensor template defaults changed, reconciling all Sensors")
+			notify(sensorDefaultsChanged, &aev1.Sensor{})
+		}
 	})
 	if err != nil {
 		logger.Fatalw("Failed to load global configuration file", zap.Error(err))
@@ -134,7 +151,7 @@ func Start(eventsOpts ArgoEventsControllerOpts) {
 
 	// EventSource controller
 	eventSourceController, err := controller.New(eventsource.ControllerName, mgr, controller.Options{
-		Reconciler: eventsource.NewReconciler(mgr.GetClient(), mgr.GetScheme(), imageName, logger),
+		Reconciler: eventsource.NewReconciler(mgr.GetClient(), mgr.GetScheme(), imageName, config.EventSourceTemplateDefaults, logger),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up EventSource controller", zap.Error(err))
@@ -163,9 +180,26 @@ func Start(eventsOpts ArgoEventsControllerOpts) {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
+	// Reconcile all EventSources when the template defaults change
+	if err := eventSourceController.Watch(source.Channel(eventSourceDefaultsChanged,
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, _ client.Object) []reconcile.Request {
+			list := &aev1.EventSourceList{}
+			if err := mgr.GetClient().List(ctx, list); err != nil {
+				logger.Errorw("Failed to list EventSources", zap.Error(err))
+				return nil
+			}
+			requests := make([]reconcile.Request, 0, len(list.Items))
+			for _, es := range list.Items {
+				requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&es)})
+			}
+			return requests
+		}))); err != nil {
+		logger.Fatalw("Unable to watch EventSource template defaults", zap.Error(err))
+	}
+
 	// Sensor controller
 	sensorController, err := controller.New(sensor.ControllerName, mgr, controller.Options{
-		Reconciler: sensor.NewReconciler(mgr.GetClient(), mgr.GetScheme(), imageName, logger),
+		Reconciler: sensor.NewReconciler(mgr.GetClient(), mgr.GetScheme(), imageName, config.SensorTemplateDefaults, logger),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up Sensor controller", zap.Error(err))
@@ -187,8 +221,34 @@ func Start(eventsOpts ArgoEventsControllerOpts) {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}
 
+	// Reconcile all Sensors when the template defaults change
+	if err := sensorController.Watch(source.Channel(sensorDefaultsChanged,
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, _ client.Object) []reconcile.Request {
+			list := &aev1.SensorList{}
+			if err := mgr.GetClient().List(ctx, list); err != nil {
+				logger.Errorw("Failed to list Sensors", zap.Error(err))
+				return nil
+			}
+			requests := make([]reconcile.Request, 0, len(list.Items))
+			for _, s := range list.Items {
+				requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&s)})
+			}
+			return requests
+		}))); err != nil {
+		logger.Fatalw("Unable to watch Sensor template defaults", zap.Error(err))
+	}
+
 	logger.Infow("Starting controller manager", "version", argoevents.GetVersion())
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		logger.Fatalw("Unable to start controller manager", zap.Error(err))
+	}
+}
+
+// notify sends a non-blocking signal on ch. The channel has a buffer of one,
+// so changes made before the previous signal was handled are coalesced.
+func notify(ch chan<- event.GenericEvent, obj client.Object) {
+	select {
+	case ch <- event.GenericEvent{Object: obj}:
+	default:
 	}
 }

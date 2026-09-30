@@ -46,12 +46,14 @@ type reconciler struct {
 	scheme *runtime.Scheme
 
 	sensorImage string
-	logger      *zap.SugaredLogger
+	// templateDefaults returns the Sensor template defaults from the controller config, may be nil
+	templateDefaults func() *v1alpha1.Template
+	logger           *zap.SugaredLogger
 }
 
 // NewReconciler returns a new reconciler
-func NewReconciler(client client.Client, scheme *runtime.Scheme, sensorImage string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &reconciler{client: client, scheme: scheme, sensorImage: sensorImage, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, sensorImage string, templateDefaults func() *v1alpha1.Template, logger *zap.SugaredLogger) reconcile.Reconciler {
+	return &reconciler{client: client, scheme: scheme, sensorImage: sensorImage, templateDefaults: templateDefaults, logger: logger}
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -127,6 +129,9 @@ func (r *reconciler) reconcile(ctx context.Context, sensor *v1alpha1.Sensor) err
 			v1alpha1.LabelSensorName: sensor.Name,
 			v1alpha1.LabelOwnerName:  sensor.Name,
 		},
+	}
+	if r.templateDefaults != nil {
+		args.TemplateDefaults = r.templateDefaults()
 	}
 	return Reconcile(r.client, eventBus, args, log)
 }

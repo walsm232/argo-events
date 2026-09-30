@@ -113,6 +113,22 @@ func Test_BuildDeployment(t *testing.T) {
 		assert.Equal(t, deployment.Spec.Template.Spec.PriorityClassName, "test-class")
 	})
 
+	t.Run("test template defaults", func(t *testing.T) {
+		args := &AdaptorArgs{
+			Image:       testImage,
+			EventSource: testEventSource,
+			Labels:      testLabels,
+			TemplateDefaults: &v1alpha1.Template{
+				ServiceAccountName: "default-sa",
+				PriorityClassName:  "default-class",
+			},
+		}
+		deployment, err := buildDeployment(args, fakeEventBus)
+		assert.Nil(t, err)
+		assert.Equal(t, "default-sa", deployment.Spec.Template.Spec.ServiceAccountName)
+		assert.Equal(t, "test-class", deployment.Spec.Template.Spec.PriorityClassName)
+	})
+
 	t.Run("test kafka eventbus secrets attached", func(t *testing.T) {
 		args := &AdaptorArgs{
 			Image:       testImage,

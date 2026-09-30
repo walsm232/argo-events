@@ -26,6 +26,8 @@ type AdaptorArgs struct {
 	Image       string
 	EventSource *v1alpha1.EventSource
 	Labels      map[string]string
+	// TemplateDefaults are merged under the object's spec.template
+	TemplateDefaults *v1alpha1.Template
 }
 
 // Reconcile does the real logic
@@ -346,6 +348,10 @@ func buildDeployment(args *AdaptorArgs, eventBus *v1alpha1.EventBus) (*appv1.Dep
 }
 
 func buildDeploymentSpec(args *AdaptorArgs) (*appv1.DeploymentSpec, error) {
+	template, err := controllerscommon.MergeTemplate(args.TemplateDefaults, args.EventSource.Spec.Template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge template defaults: %w", err)
+	}
 	eventSourceContainer := corev1.Container{
 		Image:           args.Image,
 		ImagePullPolicy: sharedutil.GetImagePullPolicy(),
@@ -354,14 +360,13 @@ func buildDeploymentSpec(args *AdaptorArgs) (*appv1.DeploymentSpec, error) {
 			{Name: "metrics", ContainerPort: v1alpha1.EventSourceMetricsPort},
 		},
 	}
-	if x := args.EventSource.Spec.Template; x != nil && x.Container != nil {
-		x.Container.ApplyToContainer(&eventSourceContainer)
+	if template != nil && template.Container != nil {
+		template.Container.ApplyToContainer(&eventSourceContainer)
 	}
 	eventSourceContainer.Name = "main"
 	podTemplateLabels := make(map[string]string)
-	if args.EventSource.Spec.Template != nil && args.EventSource.Spec.Template.Metadata != nil &&
-		len(args.EventSource.Spec.Template.Metadata.Labels) > 0 {
-		for k, v := range args.EventSource.Spec.Template.Metadata.Labels {
+	if template != nil && template.Metadata != nil && len(template.Metadata.Labels) > 0 {
+		for k, v := range template.Metadata.Labels {
 			podTemplateLabels[k] = v
 		}
 	}
@@ -386,19 +391,19 @@ func buildDeploymentSpec(args *AdaptorArgs) (*appv1.DeploymentSpec, error) {
 			},
 		},
 	}
-	if args.EventSource.Spec.Template != nil {
-		if args.EventSource.Spec.Template.Metadata != nil {
-			spec.Template.SetAnnotations(args.EventSource.Spec.Template.Metadata.Annotations)
+	if template != nil {
+		if template.Metadata != nil {
+			spec.Template.SetAnnotations(template.Metadata.Annotations)
 		}
-		spec.Template.Spec.ServiceAccountName = args.EventSource.Spec.Template.ServiceAccountName
-		spec.Template.Spec.Volumes = args.EventSource.Spec.Template.Volumes
-		spec.Template.Spec.SecurityContext = args.EventSource.Spec.Template.SecurityContext
-		spec.Template.Spec.NodeSelector = args.EventSource.Spec.Template.NodeSelector
-		spec.Template.Spec.Tolerations = args.EventSource.Spec.Template.Tolerations
-		spec.Template.Spec.Affinity = args.EventSource.Spec.Template.Affinity
-		spec.Template.Spec.ImagePullSecrets = args.EventSource.Spec.Template.ImagePullSecrets
-		spec.Template.Spec.PriorityClassName = args.EventSource.Spec.Template.PriorityClassName
-		spec.Template.Spec.Priority = args.EventSource.Spec.Template.Priority
+		spec.Template.Spec.ServiceAccountName = template.ServiceAccountName
+		spec.Template.Spec.Volumes = template.Volumes
+		spec.Template.Spec.SecurityContext = template.SecurityContext
+		spec.Template.Spec.NodeSelector = template.NodeSelector
+		spec.Template.Spec.Tolerations = template.Tolerations
+		spec.Template.Spec.Affinity = template.Affinity
+		spec.Template.Spec.ImagePullSecrets = template.ImagePullSecrets
+		spec.Template.Spec.PriorityClassName = template.PriorityClassName
+		spec.Template.Spec.Priority = template.Priority
 	}
 	return spec, nil
 }

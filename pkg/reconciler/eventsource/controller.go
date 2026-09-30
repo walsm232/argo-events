@@ -28,12 +28,14 @@ type reconciler struct {
 	scheme *runtime.Scheme
 
 	eventSourceImage string
+	// templateDefaults returns the EventSource template defaults from the controller config, may be nil
+	templateDefaults func() *v1alpha1.Template
 	logger           *zap.SugaredLogger
 }
 
 // NewReconciler returns a new reconciler
-func NewReconciler(client client.Client, scheme *runtime.Scheme, eventSourceImage string, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &reconciler{client: client, scheme: scheme, eventSourceImage: eventSourceImage, logger: logger}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, eventSourceImage string, templateDefaults func() *v1alpha1.Template, logger *zap.SugaredLogger) reconcile.Reconciler {
+	return &reconciler{client: client, scheme: scheme, eventSourceImage: eventSourceImage, templateDefaults: templateDefaults, logger: logger}
 }
 
 func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -91,6 +93,9 @@ func (r *reconciler) reconcile(ctx context.Context, eventSource *v1alpha1.EventS
 			v1alpha1.LabelEventSourceName: eventSource.Name,
 			v1alpha1.LabelOwnerName:       eventSource.Name,
 		},
+	}
+	if r.templateDefaults != nil {
+		args.TemplateDefaults = r.templateDefaults()
 	}
 	return Reconcile(r.client, args, log)
 }

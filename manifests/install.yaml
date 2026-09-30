@@ -385,6 +385,17 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.20.1
           configReloaderImage: natsio/nats-server-config-reloader:0.23.0
           startCommand: /nats-server
+    # Defaults merged into the spec.template of every EventSource and Sensor,
+    # values set on an object take precedence. Changes are rolled out to
+    # existing EventSources and Sensors. See docs/template-defaults.md.
+    # eventSource:
+    #   template:
+    #     securityContext:
+    #       runAsNonRoot: true
+    # sensor:
+    #   template:
+    #     securityContext:
+    #       runAsNonRoot: true
 kind: ConfigMap
 metadata:
   name: argo-events-controller-config
